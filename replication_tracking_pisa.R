@@ -223,19 +223,66 @@ final_inequality <-
          country = rep(country_names, each = length(vector_to_fill))) %>%
   gather(indicators, value, GINI:S90S10)
 
-
 pisa_to_nest_2 <-
   final_inequality %>%
   mutate(year = as.character(year)) %>%
   right_join(pisa_to_nest, by = c("country", "year"))
 
-pisa_to_nest_2 %>%
-  filter(continent == "Europe" & indicators == "GINI") %>%
+my_plots <-
+  map(na.omit(unique(pisa_to_nest_2$indicators)), function(inequality_measure) {
+  pisa_to_nest_2 %>%
+  filter(continent == "Europe" & indicators == inequality_measure) %>%
   ggplot(aes(value, estimate_read)) +
-  geom_point(aes(colour = region), alpha = 0.7) +
+  geom_point(alpha = 0.7) +
   # geom_text_repel(aes(Value, estimate_math, label = country)) +
   geom_smooth(method = "lm") +
-  facet_wrap(~ year)
+  xlab(inequality_measure) +
+  ylab("") +
+  facet_grid(~ year) +
+  theme_minimal()
+})
+
+source("http://peterhaschke.com/Code/multiplot.R")
+
+multiplot(my_plots[[1]], my_plots[[2]],
+          my_plots[[3]], my_plots[[4]], cols = 1)
+
+multiplot(my_plots[[5]], my_plots[[6]],
+          my_plots[[7]], my_plots[[8]], cols = 1)
+
+
+correlation_tests_second <-
+  pisa_to_nest_2 %>%
+  filter(continent %in% c("Europe")) %>%
+  split(interaction(.$year, .$continent, .$indicators)) %>%
+  na.omit() %>%
+  map(~ cor.test(.x$estimate_math, .x$value))
+
+cor.extract <- function(cor_object) {
+  data.frame(cor = unname(cor_object$estimate), p_val = cor_object$p.value)
+}
+
+ my_corrs <-
+  map(inequality_indicator, function(ineq_indi) {
+  map(correlation_tests_second, cor.extract) %>%
+  enframe() %>%
+  unnest(value) %>%
+  separate(name, c("year", "country", "indicators")) %>%
+  filter(indicators == ineq_indi)  %>%
+  ggplot(aes(year, cor)) +
+  geom_line(aes(group = indicators)) +
+  geom_point(aes(colour = p_val <= 0.1), size = 2) +
+  scale_colour_discrete(guide = F) +
+  xlab("") + ylab(ineq_indi)
+})
+
+multiplot(my_corrs[[1]], my_corrs[[2]],
+          my_corrs[[3]], my_corrs[[4]], cols = 1)
+
+multiplot(my_corrs[[5]], my_corrs[[6]],
+          my_corrs[[7]], my_corrs[[8]], cols = 1)
+
+
 
 ##### Tracking indicator
 tracking <-
