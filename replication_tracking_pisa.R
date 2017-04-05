@@ -64,7 +64,7 @@ pisa$reg_models_read <- map(seq_along(pisa$selected_vars), function(index) {
 })
 beepr::beep()
 
-write_rds()
+write_rds(pisa, path = "./pisa")
 
 pisa$r_sq <-
   map(pisa$reg_models, ~ map(.x, ~ .x$reg[grep("squared", row.names(.x$reg)), 1:2]))
