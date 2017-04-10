@@ -8,8 +8,15 @@ library(cimentadaj)
 library(haven)
 library(intsvy)
 library(ggrepel)
+library(SAScii)
 
 student2015 <- read_sav("/Users/cimentadaj/Downloads/PISA/PISA2015/CY6_MS_CMB_STU_QQQ.sav")
+pisa2012_dir <- "/Users/cimentadaj/Downloads/PISA/PISA2012/"
+dic_student <- parse.SAScii(sas_ri = paste0(pisa2012_dir, 'PISA2012_SAS_student.sas'))
+
+student2012 <- read_fwf(file = paste0(pisa2012_dir, 'INT_STU12_DEC03.txt'),
+                        col_positions = fwf_widths(dic_student$width), progress = T)
+colnames(student2012) <- dic_student$varname
 
 pisa_data_names <- c("math2000", paste0("student", seq(2003, 2015, 3)))
 
@@ -226,7 +233,8 @@ final_inequality <-
 pisa_to_nest_2 <-
   final_inequality %>%
   mutate(year = as.character(year)) %>%
-  right_join(pisa_to_nest, by = c("country", "year"))
+  right_join(pisa_to_nest, by = c("country", "year")) %>%
+  filter(country != "Russia")
 
 my_plots <-
   map(na.omit(unique(pisa_to_nest_2$indicators)), function(inequality_measure) {
@@ -271,9 +279,11 @@ cor.extract <- function(cor_object) {
   filter(indicators == ineq_indi)  %>%
   ggplot(aes(year, cor)) +
   geom_line(aes(group = indicators)) +
+  geom_smooth(aes(group = indicators), method = "lm", se = F) +
   geom_point(aes(colour = p_val <= 0.1), size = 2) +
   scale_colour_discrete(guide = F) +
-  xlab("") + ylab(ineq_indi)
+  xlab("") + ylab(ineq_indi) +
+  theme_minimal()
 })
 
 multiplot(my_corrs[[1]], my_corrs[[2]],
@@ -282,24 +292,115 @@ multiplot(my_corrs[[1]], my_corrs[[2]],
 multiplot(my_corrs[[5]], my_corrs[[6]],
           my_corrs[[7]], my_corrs[[8]], cols = 1)
 
-
-
 ##### Tracking indicator
 tracking <-
-  read_csv("./Downloads/tracking.csv") %>%
+  read_csv("./tracking.csv") %>%
   select(-bwid, -cntry)
 
-pisa_to_nest <-
+pisa_to_nest_3 <-
   pisa_to_nest %>%
   left_join(tracking, c("country" = "cntry_name"))
 
-pisa_to_nest %>%
-  ggplot(aes(zstand_timss, estimate_read, alpha = std.error_read)) +
+pisa_to_nest_3 %>%
+  filter(continent == "Europe") %>%
+  ggplot(aes(ztrack, estimate_math, alpha = std.error_math)) +
   geom_point() +
   geom_smooth(method = "lm") +
   facet_wrap(~ year) +
   scale_alpha_continuous(guide = F)
 
+correlation_tests_third <-
+  pisa_to_nest_3 %>%
+  filter(continent %in% c("Europe")) %>%
+  split(interaction(.$year, .$continent)) %>%
+  na.omit() %>%
+  map(~ cor.test(.x$estimate_math, .x$ztrack))
+
+corr_df <-
+  map(correlation_tests_third, cor.extract) %>%
+  enframe() %>%
+  unnest(value) %>%
+  separate(name, c("year", "country"))
+
+corr_df %>%
+  ggplot(aes(year, cor)) +
+  geom_line(aes(group = country)) +
+  geom_smooth(aes(group = country), method = "lm") +
+  geom_point() +
+  ylab("Tracking * Social inequality correlation") +
+  xlab("") +
+  theme_minimal() +
+  coord_fixed(3)
+
+#### New Modeling ####
+pisa2 <- pisa[-1, ]
+
+pisa2$selected_vars <-
+  map(seq_along(pisa2$value), function(row) {
+    immigrant_var <-
+      switch(pisa2$name[row],
+             "student2003" = "ST15Q02",
+             "student2006" = "ST11Q02",
+             "student2009" = "ST17Q02",
+             "student2012" = "ST20Q02",
+             "student2015" = "ST019BQ01T")
+    
+    if ("hisei" %in% names(pisa2$value[[row]])) pisa2$value[[row]]$HISEI <- pisa2$value[[row]]$hisei
+    
+    pisa2$value[[row]] %>%
+      rename_(mom_imm = immigrant_var)
+})
+
+quants_math <- map_dbl(pisa2$value, ~ quantile(.x$PV1MATH, prob = 0.7, na.rm = T))
+quants_read <- map_dbl(pisa2$value, ~ quantile(.x$PV1READ, prob = 0.7, na.rm = T))
+
+pisa2$selected_vars <-
+  seq_along(pisa2$selected_vars) %>%
+  map(function(data) {
+    pisa2$selected_vars[[data]] %>%
+      mutate(country = pisa_countrynames[as.character(CNT)],
+             highest_edu = as.character(car::recode(as.numeric(HISCED), "1:3 = 1; 4:5 = 2; 6:7 = 3")),
+             distance_from_mean_math = PV1MATH - quants_math[data],
+             distance_from_mean_read = PV1READ - quants_read[data]) %>%
+      select(country,
+             distance_from_mean_math,
+             distance_from_mean_read,
+             highest_edu,
+             HISCED,
+             MISCED,
+             mom_imm,
+             HISEI,
+             PARED,
+             HEDRES,
+             HISEI,
+             HOMEPOS,
+             ESCS,
+             ends_with("READ"),
+             ends_with("MATH")) %>%
+      as_tibble()
+  })
+
+pisa2$reg_models_new_dv_math <- map(seq_along(pisa2$selected_vars), function(index) {
+  print(pisa2$name[index])
+  if (pisa2$name[index] == "student2015") {
+    pisa2015.reg(y = "distance_from_mean_math", x = c("MISCED", "mom_imm", "HISEI"),
+                 by = "country", data = pisa2$selected_vars[[index]])
+  } else {
+    pisa.reg(y = "distance_from_mean_math", x = c("MISCED", "mom_imm", "HISEI"),
+                 by = "country", data = pisa2$selected_vars[[index]])
+  }
+})
+
+# pisa2$reg_models_new_dv_read <- map(seq_along(pisa2$selected_vars), function(index) {
+#   print(pisa2$name[index])
+#   if (pisa2$name[index] == "student2015") {
+#     pisa2015.reg(y = "distance_from_mean_read", x = c("MISCED", "mom_imm", "HISEI"),
+#                  by = "country", data = pisa2$selected_vars[[index]])
+#   } else {
+#     pisa.reg(y = "distance_from_mean_read", x = c("MISCED", "mom_imm", "HISEI"),
+#              by = "country", data = pisa2$selected_vars[[index]])
+#   }
+# })
 
 
 # Create variable with language spoken at home the same at school or not
@@ -307,11 +408,5 @@ pisa_to_nest %>%
 # HISEI and ESCS models separate
 # Extract R2 and use GINI index scatterplot.
 
-# Try 2015 PISA
-# Try other GINI-type coefficients
 # Try their tracking index, as well as wefhorst's.
 # Repeat on TIMSS and PIRLS.
-
-"MISED"
-"ESCS" # SES index
-"HISEI" # SES index not in 2015
