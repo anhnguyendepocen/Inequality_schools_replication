@@ -5,14 +5,12 @@ author: "Jorge Cimentada"
 date: "4/10/2017"
 output:
   html_document: default
-  html_notebook: default
   pdf_document: default
 ---
-
 ```{r, echo = F}
 knitr::opts_chunk$set(
   echo = F,
-  warnings = F,
+  warning = F,
   message = F
 )
 ```
@@ -29,6 +27,7 @@ library(haven)
 library(intsvy)
 library(ggrepel)
 library(SAScii)
+source("http://peterhaschke.com/Code/multiplot.R")
 ```
 
 ```{r, read_data}
@@ -49,7 +48,6 @@ library(SAScii)
 #   setNames(pisa_data_names) %>%
 #   enframe()
 ```
-
 
 ```{r}
 # pisa$selected_vars <-
@@ -82,7 +80,7 @@ library(SAScii)
 # })
 ```
 
-```{r}
+```{r, modeling}
 # pisa$reg_models_math <- map(seq_along(pisa$selected_vars), function(index) {
 #   print(pisa$name[index])
 #   
@@ -113,6 +111,19 @@ pisa <- read_rds("./pisa")
 colnames(pisa)[4] <- "reg_models_math"
 ```
 
+IN 2006, Dupriez and Dumay published a paper in 'Comparative Education' where they attempted  to measure the degree of educational inequality in a country and whether it was related to school structure rather than societal inequality. The argument they propose does follow a logical explanation, and theoretically, has valid conclusions. In this brief paper, it is my attempt to replicate some of their findings, and where possible, extend it.
+
+As a first analysis, Dupriez and Dumay (2006) posit a question: is the effect of family background related to the degree of tracking in a country or is it related to the degree of economic inequality? This questions comes arund because tracking has been often found to be correlated and often causally (cita Hanushek and Woessman) related to dispersion of test scores. Dupriez and Dumay (2006) hypothesize that background effects are primarily related to the school structure and not that level of inequality of the society. In fact, they suggest that, if society is behind the change of the background effects then we should expect to find a fairly strong relationship. Probably because there aren't a lot of European countries to concentrate on, they only look at this relationship within Europe, a region with little variation in terms of economic equality. The authors warn that this might be one reason why their results are not entirely valid and should be careful in making general remarks.
+
+They find that the GINI coefficient^[Taken from the World Development Report, United Nations, 2003] is unrelated to family background. What do they use as family background? Well, building on the definition of Yossi and Shavit (1993) and Breen and Goldthorpe (), they adopt the definition that equality is a country where a child's performance is statistically independente of the background where they come from. It is for this reason that their index is a simply the R-square of regression of child performance on mother's education (coded as 1 for post-secondary education and 0 for less), whether the same language is spoken at home/school and the International Socio-Economic Index.
+
+## Economic inequality
+
+They're first results are below and show that the two variables are independente of each other.
+
+![My Figure](./images/pic1)
+
+The Y axis is the percent of explained variance of the model explained above whereas the X axis is the GINI coefficient. In this paper I try to replicate to the closest possible their model specification. I run a model with child's performance as the dependent variable, mother's education coded as 1 for ISCED 5B or higher (which is the beginning of tertiary education, see [here](https://en.wikipedia.org/wiki/International_Standard_Classification_of_Education) for a formal definition of each category), whether the mother is an immigrant or not and the ISEI index. As one cas see, the model specification is slightly different due to the mother's variable. I choose this model specification because it was not very easy to code this variable in new PISA surveys (I couldn't find it). However, I presume that both the language variable and whether the mother was an immigrant are capturing similar things and the results should be fairly similar. Below I plotted the same relationship for all European countries.
 
 ```{r, obtain_rsq}
 pisa$r_sq_math <-
@@ -128,8 +139,7 @@ pisa_unnested <-
   unnest(r_sq_math, r_sq_read)
 ```
 
-
-```{r}
+```{r, data_ready}
 vars <- c("estimate", "std.error")
 colnames(pisa_unnested) <-
   c("type", "country",paste0(vars, "_math"), paste0(c("country", vars), "_read"))
@@ -145,85 +155,109 @@ pisa_to_nest <-
 ```
 
 ```{r, gini_data}
-tempdir <- tempdir()
-
-file_unzip <- file.path(tempdir, "stata.zip")
-download.file("https://www.wider.unu.edu/sites/default/files/WIID3.4_New.zip", file_unzip)
-unzip(file_unzip, exdir = tempdir)
-file_name <- list.files(tempdir, pattern = ".dta")
-
 gini <-
-  read_dta(file.path(tempdir, file_name)) %>%
-  select(Country, Year, Gini) %>%
-  mutate_if(is_integer, as.character) %>%
-  mutate(Gini = as.numeric(Gini)) %>%
-  group_by(Country, Year) %>%
-  summarise(avg_gini = mean(Gini, na.rm = T),
-            median_gini = median(Gini, na.rm = T))
+  read_csv("./tabula-hdr.csv", skip = 5) %>%
+  rename(countries = `High human development`,
+         mix_vars = X6) %>%
+  select(countries, mix_vars) %>%
+  separate(mix_vars, c("random", "avg_gini"), sep = " ") %>%
+  separate(countries, c("ID", "Country")) %>%
+  select(-random, - ID) %>%
+  mutate(avg_gini = as.numeric(car::recode(avg_gini, '".." = NA')),
+         Year = "2000") %>%
+  filter(complete.cases(.))
 ```
 
-```{r, europe_correlation}
+```{r, europe_scatterplots, fig.align="center"}
 pisa_to_nest_2 <-
   gini %>%
   right_join(pisa_to_nest, by = c("Country" = "country", "Year" = "year"))
 
-pisa_to_nest_2 %>%
-  filter(continent == "Europe" & Country != "Russia") %>%
-  ggplot(aes(avg_gini, estimate_math)) +
-  geom_point(aes(colour = region), alpha = 0.7) +
-  # geom_text_repel(aes(Value, estimate_math, label = country)) + # In case want to see which country is which
-  geom_smooth(method = "lm") +
-  facet_wrap(~ Year)
-```
+rounder <- function(number) round(number, digits = 2)
 
-```{r, correlation_tests}
-cor.extract <- function(cor_object) {
-  data.frame(cor = unname(cor_object$estimate), p_val = cor_object$p.value)
+theme_jorge <- function() {
+  theme_minimal() +
+    theme(axis.line = element_line(colour = "grey"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank())
 }
 
-correlation_tests <-
+p1 <-
   pisa_to_nest_2 %>%
-  filter(continent %in% c("Europe") & Country != "Russia") %>%
-  split(interaction(.$Year, .$continent)) %>%
-  na.omit() %>%
-  map(~ cor.test(.x$estimate_math, .x$avg_gini))
+  filter(continent == "Europe" & Year == "2000") %>%
+  ggplot(aes(avg_gini, estimate_math)) +
+  geom_smooth(method = "lm", se  = F) +
+  geom_point(aes(colour = region), alpha = 0.7) +
+  geom_text_repel(aes(avg_gini, estimate_math, label = Country)) + # In case want to see which country is which
+  ylim(0, 0.30) +
+  scale_colour_discrete(guide = F) +
+  scale_x_continuous(labels = seq(24, 40, 2),
+                     breaks = seq(24, 40, 2)) +
+  ggtitle("Mathematics") +
+  xlab("Gini Index") +
+  ylab("Inequality of opportunities") +
+  theme_jorge()
 
-map(correlation_tests, cor.extract) %>%
-  enframe() %>%
-  unnest(value) %>%
-  separate(name, c("year", "country")) %>%
-  ggplot(aes(year, cor)) +
-  geom_line(aes(group = country)) +
-  geom_point() +
-  ylim(c(-1, 0.5)) +
-  ylab("Correlation") +
-  xlab("") +
-  geom_hline(yintercept = 0, colour = "red", alpha = 0.4) +
-  theme_minimal()
+p2 <-
+  pisa_to_nest_2 %>%
+  filter(continent == "Europe" & Year == "2000") %>%
+  ggplot(aes(avg_gini, estimate_read)) +
+  geom_smooth(method = "lm", se  = F) +
+  geom_point(aes(colour = region), alpha = 0.7) +
+  geom_text_repel(aes(avg_gini, estimate_read, label = Country)) + # In case want to see which country is which
+  scale_y_continuous(name = NULL, limits = c(0, 0.30)) +
+  scale_colour_discrete(name = "") +
+  scale_x_continuous(labels = seq(24, 40, 2),
+                     breaks = seq(24, 40, 2)) +
+  ggtitle("Literacy") +
+  xlab("Gini Index") +
+  ylab("Inequality of opportunities") +
+  theme_jorge()
+
+multiplot(p1, p2, cols = 2)
 ```
 
-```{r}
+```{r, eval = F}
+temp_dir <- tempdir()
 
+file_unzip <- file.path(temp_dir, "stata.zip")
+download.file("https://www.wider.unu.edu/sites/default/files/WIID3.4_New.zip", file_unzip)
+unzip(file_unzip, exdir = temp_dir)
+file_name <- list.files(temp_dir, pattern = "WII.*\\.dta")
+
+gini_various <-
+  read_dta(file.path(temp_dir, file_name)) %>%
+  select(Country, Year, Gini, P5, P95) %>%
+  mutate(Year = as.character(Year))
+
+unlink(temp_dir, recursive = T)
+```
+
+Dupriez and Dumay (2006) plotted the relationship only for literacy, in which I get a slightly positive slope rather than their flat relationship. In fact, the actual correlation is `r rounder(with(subset(pisa_to_nest_2, Year == "2000" & continent == "Europe"), cor(avg_gini, estimate_math, use = "complete.obs")))` for Mathematics and `r rounder(with(subset(pisa_to_nest_2, Year == "2000" & continent == "Europe"), cor(avg_gini, estimate_read, use = "complete.obs")))`. Both relationships are insignificant, proving that they adhere to Dupriez and Dumay's hypothesis. This replication shows that the relationship was indeed estimated correctly, and is robust even to a slightly different model specification. One additional contribution from this replication is to extend this same analysis to all other PISA surveys and include several other economic inequality indicators. By the time Dupriez and Dumay (2006) carried out their analysis, only PISA 2000 and 2003 were available. Up next I replicate the same analysis for all available PISA surveys to check for changes over time.
+
+Using [OECD data](https://stats.oecd.org/Index.aspx?DataSetCode=IDD), I searched for all available years for each country. Remember that the PISA waves we have range from the year 2000 to the year 2015, every three years. Because not all indicators have data for all PISA years, I always choose the closest year available. So for example, if we had data on the year 2001 but no on the year 2000, I imputed the year 2000 with the 2001 value. This gives us a nice time-series analysis, not only on the Gini index, but on all other economic inequaltiy indicators. Below you can find the plots.
+
+```{r, ineq_indicators}
 ## Download the data from https://stats.oecd.org/Index.aspx?DataSetCode=IDD.
 ## click on Export -> Text File (CSV) - > Download
 ##### All income inequality indicators
-all_indicators <-
+all_ineq_indicators <-
   read_csv("./IDD_10042017150802214.csv")
 
-# All indicators available
-setNames(unique(all_indicators$Measure), unique(all_indicators$MEASURE))
+# setNames(unique(all_ineq_indicators$Measure), unique(all_ineq_indicators$MEASURE))
 # The above code gives you all the measured available with its code.
-
+indicators <- c("GINI", "GINIB", "GINIG", "PALMA", paste0("P90P", c("10", "50")),
+                        "P50P10", "S80S20", "S90S10")
 income_inequality <-
-  all_indicators %>%
+  all_ineq_indicators %>%
   select(Country, Year, AGE, Value, MEASURE, Measure, Unit, METHODO) %>%
   mutate_if(is_integer, as.character) %>%
-  filter(MEASURE %in% c("GINI", "GINIB", "GINIG", "PALMA", paste0("P90P", c("10", "50")),
-                        "P50P10", "S80S20", "S90S10"))
+  filter(MEASURE %in% indicators)
 ```
 
-
-```{r}
+```{r, fill_all_indicators}
 vector_to_fill <- seq(2000, 2015, 3)
 vector_filler <- function(vector_to_fill, vector_to_fill_from) {
   
@@ -305,8 +339,7 @@ all_indicators <-
   setNames(country_names)
 ```
 
-```{r}
-
+```{r, scatterplots_for_all_indicators}
 # Take that list, for each country, cbind it and the data frame it.
 # Finally, row bind all of those data frames.
 reduce_df <-
@@ -340,19 +373,37 @@ my_plots <-
   xlab(inequality_measure) +
   ylab("") +
   facet_grid(~ year) +
-  theme_minimal()
+  theme_jorge()
 })
-
-source("http://peterhaschke.com/Code/multiplot.R")
 
 multiplot(my_plots[[1]], my_plots[[2]],
           my_plots[[3]], my_plots[[4]], cols = 1)
+```
 
+Each row represents an economic inequality indicator. Below you can find a small description of each one.
+
+```{r}
+table <- 
+  enframe(setNames(unique(all_ineq_indicators$Measure), unique(all_ineq_indicators$MEASURE))) %>%
+    filter(name %in% indicators)
+
+knitr::kable(table)
+```
+
+As we can see, the relationship is flat, not only for the Gini index but for all other indicators, across all years. Below is another set of indicators, which resembles the above graph as well^[I excluded Russia from all of these scatterplots because it was a strong outlier].
+
+```{r}
 multiplot(my_plots[[5]], my_plots[[6]],
           my_plots[[7]], my_plots[[8]], cols = 1)
 ```
 
-```{r}
+Up next I plot the correlations for all years and all indicators.
+
+```{r, correlations_for_all_indicators}
+cor.extract <- function(cor_object) {
+  data.frame(cor = unname(cor_object$estimate), p_val = cor_object$p.value)
+}
+
 correlation_tests_second <-
   pisa_to_nest_2 %>%
   filter(continent %in% c("Europe") & country != "Russia") %>%
@@ -360,49 +411,93 @@ correlation_tests_second <-
   na.omit() %>%
   map(~ cor.test(.x$estimate_math, .x$value))
 
- my_corrs <-
+my_corrs <-
   map(inequality_indicator, function(ineq_indi) {
   map(correlation_tests_second, cor.extract) %>%
   enframe() %>%
   unnest(value) %>%
   separate(name, c("year", "country", "indicators")) %>%
-  filter(indicators == ineq_indi)  %>%
-  ggplot(aes(year, cor)) +
-  geom_line(aes(group = indicators)) +
-  geom_smooth(aes(group = indicators), method = "lm", se = F) +
-  geom_point(aes(colour = p_val <= 0.1), size = 2) +
-  scale_colour_discrete(guide = F) +
-  xlab("") + ylab(ineq_indi) +
-  theme_minimal()
+  filter(indicators == ineq_indi)
 })
 
-
-multiplot(my_corrs[[1]], my_corrs[[2]],
-          my_corrs[[3]], my_corrs[[4]], cols = 1)
-
-multiplot(my_corrs[[5]], my_corrs[[6]],
-          my_corrs[[7]], my_corrs[[8]], cols = 1)
+my_corrs %>%
+  reduce(rbind) %>%
+  ggplot(aes(year, cor)) +
+  geom_hline(yintercept = 0) +
+  geom_line(aes(group = indicators, colour = indicators)) +
+  geom_point(aes(colour = indicators), size = 2) +
+  scale_colour_discrete(name = NULL) +
+  xlab("") + ylab("Correlation") +
+  theme_jorge()
 ```
 
-```{r}
+The correlations are predominantly negative, which should be the other way around, however they are insignificant. There seems to be a wiggly pattern that the correlations go up and down, but no discernible pattern emerges. It does look like this relation doesn't exists very strongly.
+
+## Tracking
+
+As a second step, they hypothesize that the relationship should be much stronger using a summary of the level of differentiation of a country's educational system. That is, countries which have highly tracked educational systems, should have high levels of family background effects. They find that that relationship is strong with a correlation of about 0.50.
+
+![My Figure](./images/pic2)
+
+They measure differentiation by using an index developed by Duru-Bellat et al. (2004). This index is a factor score constructed on the basis of three variables: the age at which different tracks,
+or separate educational pathways, are first introduced in each school system; the percentage of pupils who have fallen behind their age group at age 15;4 and an index of academic segregation between schools5 at age 15. This index indeed shows to be strongly correlated with family background effects.
+
+Because the degree of tracking and differentiation of a country hardly changes over time, unless a top-to-bottom reform is implemented (Jakubowski et al, 2010), I trust that using the same indicator over time can be a rough approximation of what happens in reality. In my replication, I will use a slightly different tracking indicator. Following Thijs and van Werfhorst (2011), I will use their set of indicators. Acknowledging that most authors use different representations of tracking, Thijs and van Werfhorst (2011) created a widely comprehensive set of indicators for tracking and vocational enrollment that portray very nicely the level of fragmentation of an educational system. The data can be accesed [here](http://thijsbol.com/data/).
+
+Up next I plot their indicators of tracking and the importance of family background.
+
+```{r, tracking_plots}
 ##### Tracking indicator
-# Tracking data taken from Brunello and Checchi
+
+temp_dir <- tempdir()
+file_name <- file.path(temp_dir, "tracking.zip")
+download.file("http://thijsbol.com/wp-content/uploads/2015/09/educsysdata-v4.zip",
+              destfile = file_name)
+
+unzip(file_name, exdir = temp_dir)
+
+tracking_name <- list.files(temp_dir, pattern = "bw-.*\\-full-.*\\.dta")
+
 tracking <-
-  read_csv("./tracking.csv") %>%
+  read_dta(file.path(temp_dir, tracking_name)) %>%
   select(-bwid, -cntry)
+
+unlink(temp_dir, recursive = T)
 
 pisa_to_nest_3 <-
   pisa_to_nest %>%
   left_join(tracking, c("country" = "cntry_name"))
 
-pisa_to_nest_3 %>%
+p3 <-
+  pisa_to_nest_3 %>%
   filter(continent == "Europe") %>%
   ggplot(aes(ztrack, estimate_math, alpha = std.error_math)) +
   geom_point() +
   geom_smooth(method = "lm") +
-  facet_wrap(~ year) +
-  scale_alpha_continuous(guide = F)
+  scale_x_continuous(name = NULL) +
+  scale_y_continuous("Inequality of opportunity") +
+  ggtitle("Mathematics") +
+  facet_wrap(~ year, ncol = 6) +
+  scale_alpha_continuous(guide = F) +
+  theme_jorge()
 
+p4 <-
+  pisa_to_nest_3 %>%
+  filter(continent == "Europe") %>%
+  ggplot(aes(ztrack, estimate_read, alpha = std.error_math)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle("Reading") +
+  scale_x_continuous(name = "Tracking Index") +
+  scale_y_continuous("Inequality of opportunity") +
+  facet_wrap(~ year, ncol = 6) +
+  scale_alpha_continuous(guide = F) +
+  theme_jorge()
+
+multiplot(p3, p4, cols = 1)
+```
+
+```{r}
 correlation_tests_third <-
   pisa_to_nest_3 %>%
   filter(continent %in% c("Europe")) %>%
@@ -421,7 +516,7 @@ corr_df %>%
   geom_line(aes(group = country)) +
   geom_smooth(aes(group = country), method = "lm") +
   geom_point() +
-  ylab("Tracking * Social inequality correlation") +
+  ylab("Tracking * Inequality of opportunity correlation") +
   xlab("") +
   theme_minimal() +
   coord_fixed(3)
@@ -506,4 +601,55 @@ corr_df %>%
 
 # Try their tracking index, as well as wefhorst's.
 # Repeat on TIMSS and PIRLS.
+```
+
+```{r}
+
+m <-
+  pisa$selected_vars[[1]] %>%
+  filter(country %in% c("Albania", "Argentina")) %>%
+  
+
+pisa$gap_math <- map(seq_along(pisa$selected_vars), function(data_index) {
+  
+  print(pisa$name[data_index])
+  
+  current_data <- pisa$selected_vars[[data_index]]
+  if (pisa$name[[data_index]] == "student2015") {
+    
+    pisa2015.per.pv(pvlabel = "MATH",
+                    by = "country",
+                    per = c(10, 20, 50, 80, 90),
+                    data = current_data)
+  } else {
+    
+  pisa.per.pv(pvlabel = "MATH",
+                  by = "country",
+                  per = c(10, 20, 50, 80, 90),
+                  data = current_data)
+  }
+  
+})
+pisa$gap_read <- map(seq_along(pisa$selected_vars), function(data_index) {
+  
+  print(pisa$name[data_index])
+  
+  current_data <- pisa$selected_vars[[data_index]]
+  if (pisa$name[[data_index]] == "student2015") {
+    
+    pisa2015.per.pv(pvlabel = "READ",
+                    by = "country",
+                    per = c(10, 20, 50, 80, 90),
+                    data = current_data)
+  } else {
+    
+  pisa.per.pv(pvlabel = "READ",
+                  by = "country",
+                  per = c(10, 20, 50, 80, 90),
+                  data = current_data)
+  }
+  
+})
+
+
 ```
