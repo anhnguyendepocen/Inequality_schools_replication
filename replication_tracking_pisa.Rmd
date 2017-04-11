@@ -4,14 +4,18 @@ title: 'Replication of Inequalities in School Systems: Effect of School Structur
 author: "Jorge Cimentada"
 date: "4/10/2017"
 output:
-  html_document: default
-  pdf_document: default
+  pdf_document:
+  html_document:
+    toc: yes
+    toc_float: yes
+bibliography: bibliography.bib
 ---
 ```{r, echo = F}
 knitr::opts_chunk$set(
   echo = F,
   warning = F,
-  message = F
+  message = F,
+  fig.align = 'center'
 )
 ```
 
@@ -111,17 +115,18 @@ pisa <- read_rds("./pisa")
 colnames(pisa)[4] <- "reg_models_math"
 ```
 
-IN 2006, Dupriez and Dumay published a paper in 'Comparative Education' where they attempted  to measure the degree of educational inequality in a country and whether it was related to school structure rather than societal inequality. The argument they propose does follow a logical explanation, and theoretically, has valid conclusions. In this brief paper, it is my attempt to replicate some of their findings, and where possible, extend it.
+In 2006, Vincent Dupriez and Xavier Dumay published a paper called Inequalities in school systems: effect of
+school structure or of society structure? which you can download from [here](http://s3.amazonaws.com/academia.edu.documents/46640565/Inequalities_in_school_systems_effect_of20160620-7965-1dbj0mp.pdf?AWSAccessKeyId=AKIAIWOWYYGZ2Y53UL3A&Expires=1491922355&Signature=Pn%2FrrPtBIZGytGK7Jy8%2FBInwOh8%3D&response-content-disposition=inline%3B%20filename%3DInequalities_in_school_systems_effect_of.pdf) in 'Comparative Education' where they attempted  to measure the degree of educational inequality in a country and whether it was related to school structure rather than societal inequality. The argument they propose does follow a logical explanation, and theoretically, has valid conclusions. In this brief paper, it is my attempt to replicate some of their findings, and where possible, extend it.
 
-As a first analysis, Dupriez and Dumay (2006) posit a question: is the effect of family background related to the degree of tracking in a country or is it related to the degree of economic inequality? This questions comes arund because tracking has been often found to be correlated and often causally (cita Hanushek and Woessman) related to dispersion of test scores. Dupriez and Dumay (2006) hypothesize that background effects are primarily related to the school structure and not that level of inequality of the society. In fact, they suggest that, if society is behind the change of the background effects then we should expect to find a fairly strong relationship. Probably because there aren't a lot of European countries to concentrate on, they only look at this relationship within Europe, a region with little variation in terms of economic equality. The authors warn that this might be one reason why their results are not entirely valid and should be careful in making general remarks.
+As a first analysis, @dupriez2006 posit a question: is the effect of family background related to the degree of tracking in a country or is it related to the degree of economic inequality? This questions comes arund because tracking has been often found to be correlated and often causally [@hanushek2006] related to dispersion of test scores. @dupriez2006 hypothesize that background effects are primarily related to the school structure and not that level of inequality of the society. In fact, they suggest that, if society is behind the change of the background effects then we should expect to find a fairly strong relationship. Probably because there aren't a lot of European countries to concentrate on, they only look at this relationship within Europe, a region with little variation in terms of economic equality. The authors warn that this might be one reason why their results are not entirely valid and should be careful in making general remarks.
 
-They find that the GINI coefficient^[Taken from the World Development Report, United Nations, 2003] is unrelated to family background. What do they use as family background? Well, building on the definition of Yossi and Shavit (1993) and Breen and Goldthorpe (), they adopt the definition that equality is a country where a child's performance is statistically independente of the background where they come from. It is for this reason that their index is a simply the R-square of regression of child performance on mother's education (coded as 1 for post-secondary education and 0 for less), whether the same language is spoken at home/school and the International Socio-Economic Index.
+They find that the Gini index^[Taken from the World Development Report, United Nations, 2003] is unrelated to family background. What do they use as family background? Well, building on the definition of @shavit1993 and @breen1992, they adopt the definition that equality is a country where a child's performance is statistically independente of the background where they come from. It is for this reason that their index is a simply the R-square of regression of child performance on mother's education (coded as 1 for post-secondary education and 0 for less), whether the same language is spoken at home/school and the International Socio-Economic Index.
 
 ## Economic inequality
 
 They're first results are below and show that the two variables are independente of each other.
 
-![My Figure](./images/pic1)
+![](./images/pic1.png)
 
 The Y axis is the percent of explained variance of the model explained above whereas the X axis is the GINI coefficient. In this paper I try to replicate to the closest possible their model specification. I run a model with child's performance as the dependent variable, mother's education coded as 1 for ISCED 5B or higher (which is the beginning of tertiary education, see [here](https://en.wikipedia.org/wiki/International_Standard_Classification_of_Education) for a formal definition of each category), whether the mother is an immigrant or not and the ISEI index. As one cas see, the model specification is slightly different due to the mother's variable. I choose this model specification because it was not very easy to code this variable in new PISA surveys (I couldn't find it). However, I presume that both the language variable and whether the mother was an immigrant are capturing similar things and the results should be fairly similar. Below I plotted the same relationship for all European countries.
 
@@ -168,7 +173,7 @@ gini <-
   filter(complete.cases(.))
 ```
 
-```{r, europe_scatterplots, fig.align="center"}
+```{r, europe_scatterplots, fig.width = 10}
 pisa_to_nest_2 <-
   gini %>%
   right_join(pisa_to_nest, by = c("Country" = "country", "Year" = "year"))
@@ -189,7 +194,7 @@ p1 <-
   filter(continent == "Europe" & Year == "2000") %>%
   ggplot(aes(avg_gini, estimate_math)) +
   geom_smooth(method = "lm", se  = F) +
-  geom_point(aes(colour = region), alpha = 0.7) +
+  geom_point(alpha = 0.7) +
   geom_text_repel(aes(avg_gini, estimate_math, label = Country)) + # In case want to see which country is which
   ylim(0, 0.30) +
   scale_colour_discrete(guide = F) +
@@ -205,7 +210,7 @@ p2 <-
   filter(continent == "Europe" & Year == "2000") %>%
   ggplot(aes(avg_gini, estimate_read)) +
   geom_smooth(method = "lm", se  = F) +
-  geom_point(aes(colour = region), alpha = 0.7) +
+  geom_point(alpha = 0.7) +
   geom_text_repel(aes(avg_gini, estimate_read, label = Country)) + # In case want to see which country is which
   scale_y_continuous(name = NULL, limits = c(0, 0.30)) +
   scale_colour_discrete(name = "") +
@@ -235,7 +240,7 @@ gini_various <-
 unlink(temp_dir, recursive = T)
 ```
 
-Dupriez and Dumay (2006) plotted the relationship only for literacy, in which I get a slightly positive slope rather than their flat relationship. In fact, the actual correlation is `r rounder(with(subset(pisa_to_nest_2, Year == "2000" & continent == "Europe"), cor(avg_gini, estimate_math, use = "complete.obs")))` for Mathematics and `r rounder(with(subset(pisa_to_nest_2, Year == "2000" & continent == "Europe"), cor(avg_gini, estimate_read, use = "complete.obs")))`. Both relationships are insignificant, proving that they adhere to Dupriez and Dumay's hypothesis. This replication shows that the relationship was indeed estimated correctly, and is robust even to a slightly different model specification. One additional contribution from this replication is to extend this same analysis to all other PISA surveys and include several other economic inequality indicators. By the time Dupriez and Dumay (2006) carried out their analysis, only PISA 2000 and 2003 were available. Up next I replicate the same analysis for all available PISA surveys to check for changes over time.
+@dupriez2006 plotted the relationship only for literacy, in which I get a slightly positive slope rather than their flat relationship. In fact, the actual correlation is `r rounder(with(subset(pisa_to_nest_2, Year == "2000" & continent == "Europe"), cor(avg_gini, estimate_math, use = "complete.obs")))` for Mathematics and `r rounder(with(subset(pisa_to_nest_2, Year == "2000" & continent == "Europe"), cor(avg_gini, estimate_read, use = "complete.obs")))` for Literacy. Both relationships are insignificant, proving that they adhere to Dupriez and Dumay's hypothesis. This replication shows that the relationship was indeed estimated correctly, and is robust even to a slightly different model specification. One additional contribution from this replication is to extend this same analysis to all other PISA surveys and include several other economic inequality indicators. By the time @dupriez2006 carried out their analysis, only PISA 2000 and 2003 were available. Up next I replicate the same analysis for all available PISA surveys to check for changes over time.
 
 Using [OECD data](https://stats.oecd.org/Index.aspx?DataSetCode=IDD), I searched for all available years for each country. Remember that the PISA waves we have range from the year 2000 to the year 2015, every three years. Because not all indicators have data for all PISA years, I always choose the closest year available. So for example, if we had data on the year 2001 but no on the year 2000, I imputed the year 2000 with the 2001 value. This gives us a nice time-series analysis, not only on the Gini index, but on all other economic inequaltiy indicators. Below you can find the plots.
 
@@ -339,7 +344,7 @@ all_indicators <-
   setNames(country_names)
 ```
 
-```{r, scatterplots_for_all_indicators}
+```{r, scatterplots_for_all_indicators, fig.width = 10, fig.height = 9}
 # Take that list, for each country, cbind it and the data frame it.
 # Finally, row bind all of those data frames.
 reduce_df <-
@@ -392,7 +397,7 @@ knitr::kable(table)
 
 As we can see, the relationship is flat, not only for the Gini index but for all other indicators, across all years. Below is another set of indicators, which resembles the above graph as well^[I excluded Russia from all of these scatterplots because it was a strong outlier].
 
-```{r}
+```{r, fig.width = 10, fig.height = 9}
 multiplot(my_plots[[5]], my_plots[[6]],
           my_plots[[7]], my_plots[[8]], cols = 1)
 ```
@@ -437,19 +442,22 @@ The correlations are predominantly negative, which should be the other way aroun
 
 As a second step, they hypothesize that the relationship should be much stronger using a summary of the level of differentiation of a country's educational system. That is, countries which have highly tracked educational systems, should have high levels of family background effects. They find that that relationship is strong with a correlation of about 0.50.
 
-![My Figure](./images/pic2)
+![](./images/pic2.png)
 
-They measure differentiation by using an index developed by Duru-Bellat et al. (2004). This index is a factor score constructed on the basis of three variables: the age at which different tracks,
-or separate educational pathways, are first introduced in each school system; the percentage of pupils who have fallen behind their age group at age 15;4 and an index of academic segregation between schools5 at age 15. This index indeed shows to be strongly correlated with family background effects.
+They measure differentiation by using an index developed by @duru2004. This index is a factor score constructed on the basis of three variables: the age at which different tracks,
+or separate educational pathways, are first introduced in each school system; the percentage of pupils who have fallen behind their age group at age 15; and an index of academic segregation between schools at age 15. This index indeed shows to be strongly correlated with family background effects.
 
-Because the degree of tracking and differentiation of a country hardly changes over time, unless a top-to-bottom reform is implemented (Jakubowski et al, 2010), I trust that using the same indicator over time can be a rough approximation of what happens in reality. In my replication, I will use a slightly different tracking indicator. Following Thijs and van Werfhorst (2011), I will use their set of indicators. Acknowledging that most authors use different representations of tracking, Thijs and van Werfhorst (2011) created a widely comprehensive set of indicators for tracking and vocational enrollment that portray very nicely the level of fragmentation of an educational system. The data can be accesed [here](http://thijsbol.com/data/).
+Because the degree of tracking and differentiation of a country hardly changes over time, unless a top-to-bottom reform is implemented [@poland2010], I trust that using the same indicator over time can be a rough approximation of what happens in reality. In my replication, I will use a slightly different tracking indicator. Following @thijs2013, I will use their set of indicators. Acknowledging that most authors use different representations of tracking, @thijs2013 created a widely comprehensive set of indicators for tracking and vocational enrollment that portray very nicely the level of fragmentation of an educational system. The data can be accesed [here](http://thijsbol.com/data/).
 
-Up next I plot their indicators of tracking and the importance of family background.
+Up next I plot the new tracking indicator and the importance of family background.
 
-```{r, tracking_plots}
+```{r, tracking_plots, fig.width = 10}
 ##### Tracking indicator
 
 temp_dir <- tempdir()
+file.remove(file.path(temp_dir, list.files(temp_dir))) %>%
+  invisible()
+
 file_name <- file.path(temp_dir, "tracking.zip")
 download.file("http://thijsbol.com/wp-content/uploads/2015/09/educsysdata-v4.zip",
               destfile = file_name)
@@ -461,8 +469,6 @@ tracking_name <- list.files(temp_dir, pattern = "bw-.*\\-full-.*\\.dta")
 tracking <-
   read_dta(file.path(temp_dir, tracking_name)) %>%
   select(-bwid, -cntry)
-
-unlink(temp_dir, recursive = T)
 
 pisa_to_nest_3 <-
   pisa_to_nest %>%
@@ -497,6 +503,8 @@ p4 <-
 multiplot(p3, p4, cols = 1)
 ```
 
+Just like in @dupriez2006 I find a strong correlation between the two. In fact, both correlations verge on the 0.5, just in the their original paper. Overtime the correlation is becoming weaker, but it is still very substantial. Up next I plotted the evolution of this correlation for Mathematics.
+
 ```{r}
 correlation_tests_third <-
   pisa_to_nest_3 %>%
@@ -516,11 +524,14 @@ corr_df %>%
   geom_line(aes(group = country)) +
   geom_smooth(aes(group = country), method = "lm") +
   geom_point() +
+  ggtitle("Mathematics") +
   ylab("Tracking * Inequality of opportunity correlation") +
   xlab("") +
   theme_minimal() +
   coord_fixed(3)
 ```
+
+One can see a downward trend, going down from a high 0.7 in 2003 to the actual 0.5 coefficient. All results at this point suggest the results of @dupriez2006 not only were correct, but that they hold over time and across a wide variety of indicators.
 
 ```{r}
 # #### New Modeling ####
@@ -603,16 +614,11 @@ corr_df %>%
 # Repeat on TIMSS and PIRLS.
 ```
 
-```{r}
-
-m <-
-  pisa$selected_vars[[1]] %>%
-  filter(country %in% c("Albania", "Argentina")) %>%
-  
+```{r, eval = F}
 
 pisa$gap_math <- map(seq_along(pisa$selected_vars), function(data_index) {
   
-  print(pisa$name[data_index])
+  # print(pisa$name[data_index])
   
   current_data <- pisa$selected_vars[[data_index]]
   if (pisa$name[[data_index]] == "student2015") {
@@ -632,7 +638,7 @@ pisa$gap_math <- map(seq_along(pisa$selected_vars), function(data_index) {
 })
 pisa$gap_read <- map(seq_along(pisa$selected_vars), function(data_index) {
   
-  print(pisa$name[data_index])
+  # print(pisa$name[data_index])
   
   current_data <- pisa$selected_vars[[data_index]]
   if (pisa$name[[data_index]] == "student2015") {
@@ -651,5 +657,53 @@ pisa$gap_read <- map(seq_along(pisa$selected_vars), function(data_index) {
   
 })
 
+years <- seq(2000, 2015, 3)
+math <- map(seq_along(pisa$gap_math), function(index) {
+    pisa$gap_math[[index]]$year <- years[index]
+    pisa$gap_math[[index]]$subject <- "math"
+    pisa$gap_math[[index]]
+})
+read <- map(seq_along(pisa$gap_read), function(index) {
+    pisa$gap_read[[index]]$year <- years[index]
+    pisa$gap_read[[index]]$subject <- "read"
+    pisa$gap_read[[index]]
+})
+
+all <- list(math, read)
+
+all_rbined <-
+  all %>%
+  map(~ reduce(.x, rbind))
+
+all_types <- map(all_rbined, function(data) {
+  data %>%
+  select(-`Std. err.`) %>%
+  spread(Percentiles, Score) %>%
+  mutate(Q90_Q10 = `90` - `10`,
+         Q80_Q20 = `80` - `20`,
+         Q50_Q10 = `50` - `10`,
+         Q90_Q50 = `90` - `50`,
+         country = as.character(country),
+         year = as.character(year)) %>%
+  select(-(`10`:`90`)) %>%
+  gather(type, value, -country, -year, -subject)
+})
+
+all_types_2 <-
+  all_types %>%
+  reduce(rbind)
+
+pisa_to_nest_4 <-
+  pisa_to_nest %>%
+  left_join(all_types_2, by = c("country", "year"))
+
+pisa_to_nest_4 %>%
+  filter(subject == "math" & type == "Q80_Q20" & continent == "Europe") %>%
+  ggplot(aes(value, estimate_math)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ year)
 
 ```
+
+## Bibliography
