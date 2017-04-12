@@ -26,6 +26,7 @@ library("PISA2006lite")
 library("PISA2009lite")
 library("PISA2012lite")
 library(tidyverse)
+library(countrycode)
 library(cimentadaj)
 library(haven)
 library(intsvy)
@@ -131,13 +132,14 @@ They're first results are below and show that the two variables are independente
 The Y axis is the percent of explained variance of the model explained above whereas the X axis is the GINI coefficient. In this paper I try to replicate to the closest possible their model specification. I run a model with child's performance as the dependent variable, mother's education coded as 1 for ISCED 5B or higher (which is the beginning of tertiary education, see [here](https://en.wikipedia.org/wiki/International_Standard_Classification_of_Education) for a formal definition of each category), whether the mother is an immigrant or not and the ISEI index. As one cas see, the model specification is slightly different due to the mother's variable. I choose this model specification because it was not very easy to code this variable in new PISA surveys (I couldn't find it). However, I presume that both the language variable and whether the mother was an immigrant are capturing similar things and the results should be fairly similar. Below I plotted the same relationship for all European countries.
 
 ```{r, obtain_rsq}
-pisa$r_sq_math <-
-  map(pisa$reg_models_math, ~ map(.x, ~ .x$reg[grep("squared", row.names(.x$reg)), 1:2])) %>%
-  map(~ enframe(.x) %>% unnest(value))
 
-pisa$r_sq_read <-
-  map(pisa$reg_models_read, ~ map(.x, ~ .x$reg[grep("squared", row.names(.x$reg)), 1:2])) %>%
+r_square_extractor <- function(model) {
+  map(model, ~ map(.x, ~ .x$reg[grep("squared", row.names(.x$reg)), 1:2])) %>%
   map(~ enframe(.x) %>% unnest(value))
+}
+
+pisa$r_sq_math <- r_square_extractor(pisa$reg_models_math)
+pisa$r_sq_read <- r_square_extractor(pisa$reg_models_read)
 
 pisa_unnested <-
   pisa %>%
@@ -534,84 +536,105 @@ corr_df %>%
 One can see a downward trend, going down from a high 0.7 in 2003 to the actual 0.5 coefficient. All results at this point suggest the results of @dupriez2006 not only were correct, but that they hold over time and across a wide variety of indicators.
 
 ```{r}
-# #### New Modeling ####
-# pisa2 <- pisa[-1, ]
-# 
-# pisa2$selected_vars <-
-#   map(seq_along(pisa2$value), function(row) {
-#     immigrant_var <-
-#       switch(pisa2$name[row],
-#              "student2003" = "ST15Q02",
-#              "student2006" = "ST11Q02",
-#              "student2009" = "ST17Q02",
-#              "student2012" = "ST20Q02",
-#              "student2015" = "ST019BQ01T")
-#     
-#     if ("hisei" %in% names(pisa2$value[[row]])) pisa2$value[[row]]$HISEI <- pisa2$value[[row]]$hisei
-#     
-#     pisa2$value[[row]] %>%
-#       rename_(mom_imm = immigrant_var)
-# })
-# 
-# quants_math <- map_dbl(pisa2$value, ~ quantile(.x$PV1MATH, prob = 0.7, na.rm = T))
-# quants_read <- map_dbl(pisa2$value, ~ quantile(.x$PV1READ, prob = 0.7, na.rm = T))
-# 
-# pisa2$selected_vars <-
-#   seq_along(pisa2$selected_vars) %>%
-#   map(function(data) {
-#     pisa2$selected_vars[[data]] %>%
-#       mutate(country = pisa_countrynames[as.character(CNT)],
-#              highest_edu = as.character(car::recode(as.numeric(HISCED), "1:3 = 1; 4:5 = 2; 6:7 = 3")),
-#              distance_from_mean_math = PV1MATH - quants_math[data],
-#              distance_from_mean_read = PV1READ - quants_read[data]) %>%
-#       select(country,
-#              distance_from_mean_math,
-#              distance_from_mean_read,
-#              highest_edu,
-#              HISCED,
-#              MISCED,
-#              mom_imm,
-#              HISEI,
-#              PARED,
-#              HEDRES,
-#              HISEI,
-#              HOMEPOS,
-#              ESCS,
-#              ends_with("READ"),
-#              ends_with("MATH")) %>%
-#       as_tibble()
-#   })
-# 
-# pisa2$reg_models_new_dv_math <- map(seq_along(pisa2$selected_vars), function(index) {
-#   print(pisa2$name[index])
-#   if (pisa2$name[index] == "student2015") {
-#     pisa2015.reg(y = "distance_from_mean_math", x = c("MISCED", "mom_imm", "HISEI"),
-#                  by = "country", data = pisa2$selected_vars[[index]])
-#   } else {
-#     pisa.reg(y = "distance_from_mean_math", x = c("MISCED", "mom_imm", "HISEI"),
-#                  by = "country", data = pisa2$selected_vars[[index]])
-#   }
-# })
 
-# pisa2$reg_models_new_dv_read <- map(seq_along(pisa2$selected_vars), function(index) {
-#   print(pisa2$name[index])
-#   if (pisa2$name[index] == "student2015") {
-#     pisa2015.reg(y = "distance_from_mean_read", x = c("MISCED", "mom_imm", "HISEI"),
-#                  by = "country", data = pisa2$selected_vars[[index]])
-#   } else {
-#     pisa.reg(y = "distance_from_mean_read", x = c("MISCED", "mom_imm", "HISEI"),
-#              by = "country", data = pisa2$selected_vars[[index]])
-#   }
-# })
+# timss_dir <- "/Users/cimentadaj/Downloads/TIMSS"
+# years <- as.character(c(1995, 1999, 2003, 2007, 2011)) # years available
+# grade <- rep(c("Grade 04", "Grade 08"), times = length(years)) # grades available
+# fl_year <- paste0("Y", years) # part of path
+# 
+# # Construct the path with all of the above and sort it so the first year is first
+# dirs <- sort(paste(paste(timss_dir, years, sep = "/"), grade, fl_year, "Data/SPSS/", sep = "/"))
+# 
+# dirs <- dirs[dir.exists(dirs)] # Check which path exists and only subset those which exist
+#                                # For example, 1999 only has 8th grade, so one path will be excluded.
+# 
+# years <- list("1995" = dirs[grep("1995", dirs)],
+#               '1999' = dirs[grep("1999", dirs)],
+#               '2003' = dirs[grep("2003", dirs)],
+#               '2007' = dirs[grep("2007", dirs)],
+#               '2011' = dirs[grep("2011", dirs)])
+# 
+# timss <- map(c(years, recursive = T) ~ )
+
+#####
+
+pirls_dir <- "/Users/cimentadaj/Downloads/PIRLS/"
+years <- c("2001", "2006", "2011")
+pirls_dir2 <- paste0(pirls_dir, years, "/PIRLS/Grade 04/", "Y", years, "/Data/SPSS/")
+
+try <- map(file.path("/Users/cimentadaj/Downloads/pirls_2001_codebooks_upd", list.files("/Users/cimentadaj/Downloads/pirls_2001_codebooks_upd", pattern = ".dbf")), read.dbf)
+
+map(try, ~ .x[grep("MOTHER", .x$FIELD_LABL), c("FIELD_NAME", "FIELD_LABL")])
+
+eduparent <- c("2001" = c("ASBHEDUM"),
+                       "2006" = c("ASBHLEDM"),
+                       "2011" = c("ASBH17B"))
+
+mothers_immigrant <- c("2001" = "ASBGBRNM",
+                          "2006" = "ASBGBRNM",
+                          "2011"= "ASBH16B") # language spoken by mother
+
+socio_economic_index <- c("2001" = "ASDGPS", # INDEX OF HOME POSESS
+                             "2006" = "ASDHHER", # INDEX of HOME-Educational resources
+                             "2011" = "ASDHOCCP") # Parent's highest occupational status 
+
+pirls <- map2(pirls_dir2, eduparent, ~ pirls.select.merge(folder = .x, home = .y))
+
+pirls_list <- list(pirls_dir2, eduparent, mothers_immigrant, socio_economic_index)
+
+pirls <- 
+  pmap(pirls_list, function(one, two, three, four) {
+    if (one == pirls_dir2[3]) {
+    pirls.select.merge(one, home = c(two, three, four))  
+    } else {
+    pirls.select.merge(one, home = two, student = c(three, four))
+    }
+  })
+
+parent_coding <- c("1:6 = 0; 7:8 = 1; else = NA",
+                   "1:4 = 0; 5:7 = 1; else = NA",
+                   "1:5 = 0; 6:8 = 1; else = NA")
+
+rename_list <- list(pirls, eduparent, mothers_immigrant, socio_economic_index, parent_coding)
+
+pirls_two <- pmap(rename_list, function(data, education, mom_imm, socio, parent_coding) {
+  data %>%
+      rename_(mother_edu = education,
+              mothers_imm = mom_imm,
+              socio_econ_ind = socio) %>%
+      mutate(mother_edu = car::recode(as.numeric(mother_edu), parent_coding),
+             mothers_imm = as.numeric(mothers_imm))
+})
 
 
-# Create variable with language spoken at home the same at school or not
-# MISCED variable
-# HISEI and ESCS models separate
-# Extract R2 and use GINI index scatterplot.
+pirls_read <- map(pirls_two, ~
+  pirls.reg.pv(x = c("mother_edu", "mothers_imm", "socio_econ_ind"),
+               by = "IDCNTRYL",
+               data = .x))
 
-# Try their tracking index, as well as wefhorst's.
-# Repeat on TIMSS and PIRLS.
+pirls_sq_read <-
+  r_square_extractor(pirls_read) %>%
+  map2(c("2001", "2006", "2011"), function(data, year) data %>% mutate(year = year)) %>%
+  reduce(rbind) %>%
+  rename(pirls_read_estimate = Estimate,
+         std.error_pirls_read = `Std. Error`,
+         country_pirls = name)
+
+pisa_to_pirls <-
+  pisa_to_nest %>%
+  filter(year %in% c("2000", "2006", "2012")) %>%
+  mutate(year_pirls = as.character(car::recode(year, "2000 = 2001; 2012 = 2011")))
+
+pisa_to_pirls %>%
+  left_join(pirls_sq_read, by = c("country" = "country_pirls", "year_pirls" = "year")) %>%
+  mutate(continent = countrycode(country, "country.name", "continent")) %>%
+  filter(!is.na(pirls_read_estimate) & continent == "Europe") %>%
+  select(continent, country, year_pirls, contains("estimate"), contains("pirls")) %>%
+  mutate(diff_read = estimate_read - pirls_read_estimate) %>%
+  ggplot(aes(country, diff_read, colour = year_pirls)) +
+  geom_point() +
+  coord_flip() +
+  theme_jorge()
 ```
 
 ```{r, eval = F}
