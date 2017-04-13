@@ -554,8 +554,8 @@ years <- c("2001", "2006", "2011")
 pirls_dir2 <- paste0(pirls_dir, years, "/PIRLS/Grade 04/", "Y", years, "/Data/SPSS/")
 
 # Open the codebook and read it (remember t change all files to .dbf)
-try <- map(file.path("/Users/cimentadaj/Downloads/pirls_2001_codebooks_upd", list.files("/Users/cimentadaj/Downloads/pirls_2001_codebooks_upd", pattern = ".dbf")), read.dbf)
-
+# try <- map(file.path("/Users/cimentadaj/Downloads/pirls_2001_codebooks_upd", list.files("/Users/cimentadaj/Downloads/pirls_2001_codebooks_upd", pattern = ".dbf")), read.dbf)
+ 
 # This code allows me to find variables using regular expressions
 # map(try, ~ .x[grep("MOTHER", .x$FIELD_LABL), c("FIELD_NAME", "FIELD_LABL")])
 
