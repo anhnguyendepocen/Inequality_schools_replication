@@ -5,6 +5,7 @@ author: "Jorge Cimentada"
 date: "4/10/2017"
 output:
   pdf_document:
+    toc: yes
   html_document:
     toc: yes
     toc_float: yes
@@ -32,6 +33,7 @@ library(haven)
 library(intsvy)
 library(ggrepel)
 library(SAScii)
+library(foreign)
 source("http://peterhaschke.com/Code/multiplot.R")
 ```
 
@@ -116,8 +118,8 @@ pisa <- read_rds("./pisa")
 colnames(pisa)[4] <- "reg_models_math"
 ```
 
-In 2006, Vincent Dupriez and Xavier Dumay published a paper called Inequalities in school systems: effect of
-school structure or of society structure? which you can download from [here](http://s3.amazonaws.com/academia.edu.documents/46640565/Inequalities_in_school_systems_effect_of20160620-7965-1dbj0mp.pdf?AWSAccessKeyId=AKIAIWOWYYGZ2Y53UL3A&Expires=1491922355&Signature=Pn%2FrrPtBIZGytGK7Jy8%2FBInwOh8%3D&response-content-disposition=inline%3B%20filename%3DInequalities_in_school_systems_effect_of.pdf) in 'Comparative Education' where they attempted  to measure the degree of educational inequality in a country and whether it was related to school structure rather than societal inequality. The argument they propose does follow a logical explanation, and theoretically, has valid conclusions. In this brief paper, it is my attempt to replicate some of their findings, and where possible, extend it.
+In 2006, Vincent Dupriez and Xavier Dumay published a paper called 'Inequalities in school systems: effect of
+school structure or of society structure?' which you can download from [here](http://www.tandfonline.com/doi/full/10.1080/03050060600628074?scroll=top&needAccess=true) in 'Comparative Education' where they attempted  to measure the degree of educational inequality in a country and whether it was related to school structure rather than societal inequality. The argument they propose does follow a logical explanation, and theoretically, has valid conclusions. In this brief paper, it is my attempt to replicate some of their findings, and where possible, extend it.
 
 As a first analysis, @dupriez2006 posit a question: is the effect of family background related to the degree of tracking in a country or is it related to the degree of economic inequality? This questions comes arund because tracking has been often found to be correlated and often causally [@hanushek2006] related to dispersion of test scores. @dupriez2006 hypothesize that background effects are primarily related to the school structure and not that level of inequality of the society. In fact, they suggest that, if society is behind the change of the background effects then we should expect to find a fairly strong relationship. Probably because there aren't a lot of European countries to concentrate on, they only look at this relationship within Europe, a region with little variation in terms of economic equality. The authors warn that this might be one reason why their results are not entirely valid and should be careful in making general remarks.
 
@@ -533,38 +535,33 @@ corr_df %>%
   coord_fixed(3)
 ```
 
-One can see a downward trend, going down from a high 0.7 in 2003 to the actual 0.5 coefficient. All results at this point suggest the results of @dupriez2006 not only were correct, but that they hold over time and across a wide variety of indicators.
+One can see a downward trend, going down from a high 0.7 in 2003 to the actual 0.5 correlation coefficient. All results at this point suggest the results of @dupriez2006 not only were correct, but that they hold over time and across a wide variety of indicators.
+
+## Before tracking
+
+@dupriez2006 acknowledge that if their hypothesis is true, then early tracking countries should have greater difficulty at reducing inequalities relative to late-tracking countries. For that analysis they created a table that portrays their inequality indicator estimated from PIRLS and PISA data. They then subtract each one and check which countries had bigger reductions, relative to their degree of tracking.
+
+I replicated their analysis for all available PIRLS years (2001, 2006 and 2011) and compared them to their closest PISA equivalents (2000, 2006 and 2012). However, I had to do some compromises because not all variables were present in all data sets. For example, instead of the PISA socio-economic index, I had to use an index of home possesions for 2001, an index of home educational resources for 2006 and parent's highest occupational status in 2011. I do acknowledge that this turns the analysis upside down but I wasn't able to find neither a similar PISA index in PIRLS nor a consistent index available in all waves. All the analysis carried out for the PIRLS are for literacy, just as @dupriez2006.
+
+![](./images/pic3.png)
+
+I tried to reproduce the above a bit differently below.
 
 ```{r}
-
-# timss_dir <- "/Users/cimentadaj/Downloads/TIMSS"
-# years <- as.character(c(1995, 1999, 2003, 2007, 2011)) # years available
-# grade <- rep(c("Grade 04", "Grade 08"), times = length(years)) # grades available
-# fl_year <- paste0("Y", years) # part of path
-# 
-# # Construct the path with all of the above and sort it so the first year is first
-# dirs <- sort(paste(paste(timss_dir, years, sep = "/"), grade, fl_year, "Data/SPSS/", sep = "/"))
-# 
-# dirs <- dirs[dir.exists(dirs)] # Check which path exists and only subset those which exist
-#                                # For example, 1999 only has 8th grade, so one path will be excluded.
-# 
-# years <- list("1995" = dirs[grep("1995", dirs)],
-#               '1999' = dirs[grep("1999", dirs)],
-#               '2003' = dirs[grep("2003", dirs)],
-#               '2007' = dirs[grep("2007", dirs)],
-#               '2011' = dirs[grep("2011", dirs)])
-# 
-# timss <- map(c(years, recursive = T) ~ )
-
-#####
-
+# These are all the directories where I keep the PIRLS data for all years (only 4th grade)
 pirls_dir <- "/Users/cimentadaj/Downloads/PIRLS/"
 years <- c("2001", "2006", "2011")
 pirls_dir2 <- paste0(pirls_dir, years, "/PIRLS/Grade 04/", "Y", years, "/Data/SPSS/")
 
+# Open the codebook and read it (remember t change all files to .dbf)
 try <- map(file.path("/Users/cimentadaj/Downloads/pirls_2001_codebooks_upd", list.files("/Users/cimentadaj/Downloads/pirls_2001_codebooks_upd", pattern = ".dbf")), read.dbf)
 
-map(try, ~ .x[grep("MOTHER", .x$FIELD_LABL), c("FIELD_NAME", "FIELD_LABL")])
+# This code allows me to find variables using regular expressions
+# map(try, ~ .x[grep("MOTHER", .x$FIELD_LABL), c("FIELD_NAME", "FIELD_LABL")])
+
+# Question values for each year for mother's education, mother's immigration status
+# and socio-economic status. I had to compromise some of the variables due to
+# not being available for all years. Next to each variable is a comment describing it.
 
 eduparent <- c("2001" = c("ASBHEDUM"),
                        "2006" = c("ASBHLEDM"),
@@ -578,10 +575,11 @@ socio_economic_index <- c("2001" = "ASDGPS", # INDEX OF HOME POSESS
                              "2006" = "ASDHHER", # INDEX of HOME-Educational resources
                              "2011" = "ASDHOCCP") # Parent's highest occupational status 
 
-pirls <- map2(pirls_dir2, eduparent, ~ pirls.select.merge(folder = .x, home = .y))
-
+# List containing directories, and variables for all years
 pirls_list <- list(pirls_dir2, eduparent, mothers_immigrant, socio_economic_index)
 
+# Loop through the previous list, and in parallel, merge each year with their corresponding
+# variables.
 pirls <- 
   pmap(pirls_list, function(one, two, three, four) {
     if (one == pirls_dir2[3]) {
@@ -591,12 +589,15 @@ pirls <-
     }
   })
 
+# Recode to make mother's education 1 for post-secondary and 0 below.
 parent_coding <- c("1:6 = 0; 7:8 = 1; else = NA",
                    "1:4 = 0; 5:7 = 1; else = NA",
                    "1:5 = 0; 6:8 = 1; else = NA")
 
+# List containing datasets, coding for each year (education) and variable names to rename.
 rename_list <- list(pirls, eduparent, mothers_immigrant, socio_economic_index, parent_coding)
 
+# Rename all variables for each dataset and recode education for each datasets
 pirls_two <- pmap(rename_list, function(data, education, mom_imm, socio, parent_coding) {
   data %>%
       rename_(mother_edu = education,
@@ -606,12 +607,13 @@ pirls_two <- pmap(rename_list, function(data, education, mom_imm, socio, parent_
              mothers_imm = as.numeric(mothers_imm))
 })
 
-
+# Estimate literacy models, for all newly renamed variables, for each year
 pirls_read <- map(pirls_two, ~
   pirls.reg.pv(x = c("mother_edu", "mothers_imm", "socio_econ_ind"),
                by = "IDCNTRYL",
                data = .x))
-
+# Extract rsquared of each country, of each year, then create a column in each
+# data containing the wave year, and rbind them all together.
 pirls_sq_read <-
   r_square_extractor(pirls_read) %>%
   map2(c("2001", "2006", "2011"), function(data, year) data %>% mutate(year = year)) %>%
@@ -620,10 +622,20 @@ pirls_sq_read <-
          std.error_pirls_read = `Std. Error`,
          country_pirls = name)
 
+# Take the PISA estimations (math and read) and only choose the years which are comparable to the
+# PIRLS waves. Just so we can merge them together, change the years to PIRLS years, like
+# PISA 2000 will now be 2001, and the same for 2012.
+
 pisa_to_pirls <-
   pisa_to_nest %>%
   filter(year %in% c("2000", "2006", "2012")) %>%
   mutate(year_pirls = as.character(car::recode(year, "2000 = 2001; 2012 = 2011")))
+
+# Merge both PISA and PIRLS, calculate the difference, add the tracking data and create
+# labels and graph them.
+age_tracking <-
+  tracking %>%
+  select(cntry_name, selage)
 
 pisa_to_pirls %>%
   left_join(pirls_sq_read, by = c("country" = "country_pirls", "year_pirls" = "year")) %>%
@@ -631,11 +643,24 @@ pisa_to_pirls %>%
   filter(!is.na(pirls_read_estimate) & continent == "Europe") %>%
   select(continent, country, year_pirls, contains("estimate"), contains("pirls")) %>%
   mutate(diff_read = estimate_read - pirls_read_estimate) %>%
-  ggplot(aes(country, diff_read, colour = year_pirls)) +
-  geom_point() +
+  left_join(age_tracking, by = c("country" = "cntry_name")) %>%
+  mutate(label = paste0(country, " (", selage, ")")) %>%
+  ggplot(aes(reorder(label, -selage), year_pirls, fill = diff_read < 0)) +
+  geom_tile() +
   coord_flip() +
-  theme_jorge()
+  scale_fill_manual(guide = F, values = c("lightcoral", "skyblue2")) +
+  scale_y_discrete(name = NULL) +
+  scale_x_discrete(name = NULL) +
+  ggtitle("Which countries had a reduction of inequality of opportunity over time?") +
+  theme_jorge() +
+  theme(axis.line = element_blank())
 ```
+
+In this plot I coloured inequality reduction as blue and increase as red. The blue means that inequality was higher in PIRLS (ages 9-10) than in PISA (age 15) whereas the red squares suggest that inequality increased (PIRLS inequality is lower than PISA inequality). From this analysis, the results of @dupriez2006 don't add up. For example, they find that Sweden, France, Netherlands and Czech Republic had reductions of inequality when I find that they had increases of inequality. Moreover, I don't find any strong distinctions between tracking ages (next to the label) and the level of inequality. Even more discouraging, is the fact that no clear patterns emerges for any country over time. It's just as likely for a country to be red/blue acros the three waves.
+
+This paper is not yet a rigorous replication of @dupriez2006. I have not spoken to the authors to identify in detail how they coded each variable (although they specified it in their paper) nor which specific socio-economic indicator they used for the PIRLS analysis. However, I've tried to choose the most appropriate replication scheme. Although some results do replicate very nicely, some don't, and they were attempted to be as close as the original analysis. The R code to replicate this analysis is embedded in this Rmarkdown document, so anyone can replicate my analysis and improve it further.
+
+Any comments can be addressed to `cimentadaj@gmail.com` or contributed directly to the Github repository of this replication [here](https://github.com/cimentadaj/Inequality_schools_replication)
 
 ```{r, eval = F}
 
