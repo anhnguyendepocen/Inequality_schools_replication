@@ -253,7 +253,7 @@ Using [OECD data](https://stats.oecd.org/Index.aspx?DataSetCode=IDD), I searched
 ## click on Export -> Text File (CSV) - > Download
 ##### All income inequality indicators
 all_ineq_indicators <-
-  read_csv("./IDD_10042017150802214.csv")
+  read_csv("./IDD_10042017150802214.csv") # Update this name with the new name because it changes
 
 # setNames(unique(all_ineq_indicators$Measure), unique(all_ineq_indicators$MEASURE))
 # The above code gives you all the measured available with its code.
