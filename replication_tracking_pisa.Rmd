@@ -87,6 +87,8 @@ source("http://peterhaschke.com/Code/multiplot.R")
 # })
 ```
 
+<!-- NOTE: The dataset for this document is HUGE. You should uncomment most of the codechunks above and the code chunk below. In codechunk `read_data` you will have to download PISA 2015 and PISA 2012 and change directories for the .sav files. -->
+
 ```{r, modeling}
 # pisa$reg_models_math <- map(seq_along(pisa$selected_vars), function(index) {
 #   print(pisa$name[index])
